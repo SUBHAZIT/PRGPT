@@ -9,8 +9,7 @@ const repo = context.repo
 
 export const COMMENT_GREETING = `${getInput('bot_icon')}   PRGPT`
 
-export const COMMENT_TAG =
-  '<!-- This is an auto-generated comment by PRGPT -->'
+export const COMMENT_TAG = '<!-- This is an auto-generated comment by PRGPT -->'
 
 export const COMMENT_REPLY_TAG =
   '<!-- This is an auto-generated reply by PRGPT -->'

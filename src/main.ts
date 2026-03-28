@@ -6,7 +6,7 @@ import {
   warning
 } from '@actions/core'
 import {Bot} from './bot'
-import {GeminiOptions, Options} from './options'
+import {OpenAIOptions, Options} from './options'
 import {Prompts} from './prompts'
 import {codeReview} from './review'
 import {handleReviewComment} from './review-comment'
@@ -21,12 +21,12 @@ async function run(): Promise<void> {
     getBooleanInput('review_comment_lgtm'),
     getMultilineInput('path_filters'),
     getInput('system_message'),
-    getInput('gemini_light_model'),
-    getInput('gemini_heavy_model'),
-    getInput('gemini_model_temperature'),
-    getInput('gemini_retries'),
-    getInput('gemini_timeout_ms'),
-    getInput('gemini_concurrency_limit'),
+    getInput('openai_light_model'),
+    getInput('openai_heavy_model'),
+    getInput('openai_model_temperature'),
+    getInput('openai_retries'),
+    getInput('openai_timeout_ms'),
+    getInput('openai_concurrency_limit'),
     getInput('github_concurrency_limit'),
     getInput('language')
   )
@@ -45,11 +45,11 @@ async function run(): Promise<void> {
   try {
     lightBot = new Bot(
       options,
-      new GeminiOptions(options.geminiLightModel, options.lightTokenLimits)
+      new OpenAIOptions(options.openaiLightModel, options.lightTokenLimits)
     )
   } catch (e: any) {
     warning(
-      `Skipped: failed to create summary bot, please check your gemini_api_key: ${e}, backtrace: ${e.stack}`
+      `Skipped: failed to create summary bot, please check your openai_api_key: ${e}, backtrace: ${e.stack}`
     )
     return
   }
@@ -58,11 +58,11 @@ async function run(): Promise<void> {
   try {
     heavyBot = new Bot(
       options,
-      new GeminiOptions(options.geminiHeavyModel, options.heavyTokenLimits)
+      new OpenAIOptions(options.openaiHeavyModel, options.heavyTokenLimits)
     )
   } catch (e: any) {
     warning(
-      `Skipped: failed to create review bot, please check your gemini_api_key: ${e}, backtrace: ${e.stack}`
+      `Skipped: failed to create review bot, please check your openai_api_key: ${e}, backtrace: ${e.stack}`
     )
     return
   }
