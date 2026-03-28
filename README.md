@@ -108,4 +108,4 @@ $ npm run build && npm run package
 ## Disclaimer
 
 - Your code will be sent to Google's servers for processing.
-- This action is not affiliated with gemini api .
+
