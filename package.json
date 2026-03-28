@@ -12,6 +12,7 @@
     "format-check": "prettier --check '**/*.ts'",
     "lint": "eslint src/**/*.ts",
     "test": "jest",
+    "start": "probot run ./lib/app.js",
     "all": "npm run build && npm run format && npm run lint && npm run package && npm test"
   },
   "repository": {
@@ -36,7 +37,8 @@
     "node-fetch": "^3.3.1",
     "openai": "^6.33.0",
     "p-limit": "^4.0.0",
-    "p-retry": "^5.1.2"
+    "p-retry": "^5.1.2",
+    "probot": "^13.0.1"
   },
   "devDependencies": {
     "@jest/globals": "^29.5.0",

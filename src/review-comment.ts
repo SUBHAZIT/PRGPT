@@ -9,22 +9,21 @@ import {
   SUMMARIZE_TAG
 } from './commenter'
 import {Inputs} from './inputs'
-import {octokit} from './octokit'
 import {type Options} from './options'
 import {type Prompts} from './prompts'
 import {getTokenCount} from './tokenizer'
 
-// eslint-disable-next-line camelcase
-const context = github_context
-const repo = context.repo
 const ASK_BOT = '@prgpt'
 
 export const handleReviewComment = async (
   heavyBot: Bot,
   options: Options,
-  prompts: Prompts
+  prompts: Prompts,
+  context: any,
+  repo: {owner: string; repo: string},
+  octokit: any
 ) => {
-  const commenter: Commenter = new Commenter()
+  const commenter: Commenter = new Commenter(octokit)
   const inputs: Inputs = new Inputs()
 
   if (context.eventName !== 'pull_request_review_comment') {
@@ -76,7 +75,7 @@ export const handleReviewComment = async (
     inputs.filename = comment.path
 
     const {chain: commentChain, topLevelComment} =
-      await commenter.getCommentChain(pullNumber, comment)
+      await commenter.getCommentChain(pullNumber, comment, repo)
 
     if (!topLevelComment) {
       warning('Failed to find the top-level comment to reply to')
@@ -122,7 +121,8 @@ export const handleReviewComment = async (
           await commenter.reviewCommentReply(
             pullNumber,
             topLevelComment,
-            'Cannot reply to this comment as diff could not be found.'
+            'Cannot reply to this comment as diff could not be found.',
+            repo
           )
           return
         }
@@ -135,7 +135,8 @@ export const handleReviewComment = async (
         await commenter.reviewCommentReply(
           pullNumber,
           topLevelComment,
-          'Cannot reply to this comment as diff being commented is too large and exceeds the token limit.'
+          'Cannot reply to this comment as diff being commented is too large and exceeds the token limit.',
+          repo
         )
         return
       }
@@ -157,7 +158,8 @@ export const handleReviewComment = async (
       // get summary of the PR
       const summary = await commenter.findCommentWithTag(
         SUMMARIZE_TAG,
-        pullNumber
+        pullNumber,
+        repo
       )
       if (summary) {
         // pack short summary into the inputs if it is not too long
@@ -174,7 +176,12 @@ export const handleReviewComment = async (
 
       const [reply] = await heavyBot.chat(prompts.renderComment(inputs), {})
 
-      await commenter.reviewCommentReply(pullNumber, topLevelComment, reply)
+      await commenter.reviewCommentReply(
+        pullNumber,
+        topLevelComment,
+        reply,
+        repo
+      )
     }
   } else {
     info(`Skipped: ${context.eventName} event is from the bot itself`)

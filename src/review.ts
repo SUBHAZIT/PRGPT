@@ -13,14 +13,9 @@ import {
   SUMMARIZE_TAG
 } from './commenter'
 import {Inputs} from './inputs'
-import {octokit} from './octokit'
 import {type Options} from './options'
 import {type Prompts} from './prompts'
 import {getTokenCount} from './tokenizer'
-
-// eslint-disable-next-line camelcase
-const context = github_context
-const repo = context.repo
 
 const ignoreKeyword = '@prgpt: ignore'
 
@@ -28,9 +23,12 @@ export const codeReview = async (
   lightBot: Bot,
   heavyBot: Bot,
   options: Options,
-  prompts: Prompts
+  prompts: Prompts,
+  context: any,
+  repo: {owner: string; repo: string},
+  octokit: any
 ): Promise<void> => {
-  const commenter: Commenter = new Commenter()
+  const commenter: Commenter = new Commenter(octokit)
 
   const openaiConcurrencyLimit = pLimit(options.openaiConcurrencyLimit)
   const githubConcurrencyLimit = pLimit(options.githubConcurrencyLimit)
@@ -69,7 +67,8 @@ export const codeReview = async (
   // get SUMMARIZE_TAG message
   const existingSummarizeCmt = await commenter.findCommentWithTag(
     SUMMARIZE_TAG,
-    context.payload.pull_request.number
+    context.payload.pull_request.number,
+    repo
   )
   let existingCommitIdsBlock = ''
   let existingSummarizeCmtBody = ''
@@ -82,7 +81,7 @@ export const codeReview = async (
     )
   }
 
-  const allCommitIds = await commenter.getAllCommitIds()
+  const allCommitIds = await commenter.getAllCommitIds(context, repo)
   // find highest reviewed commit id
   let highestReviewedCommitId = ''
   if (existingCommitIdsBlock !== '') {
@@ -303,7 +302,13 @@ ${
   )
 
   // add in progress status to the summarize comment
-  await commenter.comment(`${inProgressSummarizeCmt}`, SUMMARIZE_TAG, 'replace')
+  await commenter.comment(
+    `${inProgressSummarizeCmt}`,
+    SUMMARIZE_TAG,
+    'replace',
+    context,
+    repo
+  )
 
   const summariesFailed: string[] = []
 
@@ -436,7 +441,8 @@ ${filename}: ${summary}
       try {
         await commenter.updateDescription(
           context.payload.pull_request.number,
-          message
+          message,
+          repo
         )
       } catch (e: any) {
         warning(`release notes: error from github: ${e.message as string}`)
@@ -574,6 +580,7 @@ ${
             filename,
             startLine,
             endLine,
+            repo,
             COMMENT_REPLY_TAG
           )
 
@@ -746,12 +753,19 @@ ${
     await commenter.submitReview(
       context.payload.pull_request.number,
       commits[commits.length - 1].sha,
-      statusMsg
+      statusMsg,
+      repo
     )
   }
 
   // post the final summary comment
-  await commenter.comment(`${summarizeComment}`, SUMMARIZE_TAG, 'replace')
+  await commenter.comment(
+    `${summarizeComment}`,
+    SUMMARIZE_TAG,
+    'replace',
+    context,
+    repo
+  )
 }
 
 const splitPatch = (patch: string | null | undefined): string[] => {

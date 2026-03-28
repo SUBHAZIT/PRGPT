@@ -8,7 +8,7 @@
 
 ## Overview
 
-PRGPT `ai-pr-reviewer` is an AI-based code reviewer and summarizer for GitHub pull requests using **Google Gemini 1.5** models. It is designed to be used as a GitHub Action and can be configured to run on every pull request and review comments.
+PRGPT `ai-pr-reviewer` is an AI-based code reviewer and summarizer for GitHub pull requests using **Google Gemini 1.5** or **OpenAI** models. It can be used as a **GitHub Action** or a **GitHub App** (similar to CodeRabbit).
 
 <p align="center">
   <img src="docs/images/screen.png" alt="PRGPT in action" width="800"/>
