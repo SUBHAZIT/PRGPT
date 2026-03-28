@@ -144,31 +144,31 @@ inputs:
     required: false
     description: 'Disable release notes'
     default: 'false'
-  gemini_light_model:
+  openai_light_model:
     required: false
     description:
       'Model to use for simple tasks like summarizing diff on a file.'
-    default: 'gemini-2.0-flash'
-  gemini_heavy_model:
+    default: 'gpt-4o-mini'
+  openai_heavy_model:
     required: false
     description: 'Model to use for complex tasks such as code reviews.'
-    default: 'gemini-2.0-flash'
-  gemini_model_temperature:
+    default: 'gpt-4o'
+  openai_model_temperature:
     required: false
-    description: 'Temperature for Gemini model'
+    description: 'Temperature for OpenAI model'
     default: '0.7'
-  gemini_retries:
+  openai_retries:
     required: false
     description:
-      'How many times to retry Gemini API in case of timeouts or errors?'
+      'How many times to retry OpenAI API in case of timeouts or errors?'
     default: '5'
-  gemini_timeout_ms:
+  openai_timeout_ms:
     required: false
-    description: 'Timeout for Gemini API call in millis'
+    description: 'Timeout for OpenAI API call in millis'
     default: '360000'
-  gemini_concurrency_limit:
+  openai_concurrency_limit:
     required: false
-    description: 'How many concurrent API calls to make to Gemini servers?'
+    description: 'How many concurrent API calls to make to OpenAI servers?'
     default: '6'
   github_concurrency_limit:
     required: false
@@ -179,7 +179,7 @@ inputs:
     description: 'System message to be sent to Gemini'
     default: |
       You are `@prgpt` (aka `github-actions[bot]`), a language model 
-      trained by Google. Your purpose is to act as a highly experienced 
+      trained by OpenAI. Your purpose is to act as a highly experienced 
       software engineer and provide a thorough review of the code hunks
       and suggest code snippets to improve key areas such as:
         - Logic
@@ -202,18 +202,21 @@ inputs:
     required: false
     description: 'The prompt for final summarization response'
     default: |
-      Provide your final response in markdown with the following content:
+      Provide your final response in markdown with the following format:
 
-      - **Walkthrough**: A high-level summary of the overall change instead of 
-        specific files within 80 words.
-      - **Changes**: A markdown table of files and their summaries. Group files 
-        with similar changes together into a single row to save space.
-      - **Poem**: Below the changes, include a whimsical, short poem written by 
-        an AI assistant to celebrate the changes. Format the poem as a quote using 
-        the ">" symbol and feel free to use emojis where relevant.
+      ## 📝 PR Summary
+      A high-level summary of the overall change instead of specific files within 80 words.
 
-      Avoid additional commentary as this summary will be added as a comment on the 
-      GitHub pull request. Use the titles "Walkthrough" and "Changes" and they must be H2.
+      ## 📂 Changed Files
+      A markdown table of files and their changes. Group files with similar changes together into a single row to save space.
+
+      ## 🩺 PR Health
+      Provide a "PR Health" score as either "Good" 🟢 or "Bad" 🔴 based on the code quality, logic, and potential issues.
+
+      ## 💡 Suggestions
+      If the PR Health is "Bad" or there are areas for improvement, provide a concise list of actionable suggestions. If the PR Health is "Good", you can provide a unique positive comment or celebration of the good code.
+
+      Avoid additional commentary as this summary will be added as a comment on the GitHub pull request. Ensure the titles "PR Summary", "Changed Files", "PR Health", and "Suggestions" are H2.
 
   summarize_release_notes:
     required: false

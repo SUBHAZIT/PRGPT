@@ -1,9 +1,9 @@
-import * as dotenv from 'dotenv';
-import { Bot } from './src/bot.ts';
-import { Options, GeminiOptions } from './src/options.ts';
-import { TokenLimits } from './src/limits.ts';
+import * as dotenv from 'dotenv'
+import {Bot} from './src/bot.ts'
+import {Options, GeminiOptions} from './src/options.ts'
+import {TokenLimits} from './src/limits.ts'
 
-dotenv.config();
+dotenv.config()
 
 async function testGemini() {
   const options = new Options(
@@ -23,22 +23,28 @@ async function testGemini() {
     '6',
     '6',
     'en-US'
-  );
+  )
 
-  const geminiOptions = new GeminiOptions(options.geminiHeavyModel, new TokenLimits(options.geminiHeavyModel));
-  
+  const geminiOptions = new GeminiOptions(
+    options.geminiHeavyModel,
+    new TokenLimits(options.geminiHeavyModel)
+  )
+
   try {
-    const bot = new Bot(options, geminiOptions);
-    console.log('--- Testing Gemini Chat ---');
-    console.log('Sending message to Gemini...');
-    const [response, ids] = await bot.chat('Hello! Can you confirm you are PRGPT powered by Gemini?', {});
-    console.log('Response:', response);
-    console.log('IDs:', ids);
-    console.log('--- Test Successful! ---');
+    const bot = new Bot(options, geminiOptions)
+    console.log('--- Testing Gemini Chat ---')
+    console.log('Sending message to Gemini...')
+    const [response, ids] = await bot.chat(
+      'Hello! Can you confirm you are PRGPT powered by Gemini?',
+      {}
+    )
+    console.log('Response:', response)
+    console.log('IDs:', ids)
+    console.log('--- Test Successful! ---')
   } catch (error) {
-    console.error('--- Test Failed! ---');
-    console.error(error);
+    console.error('--- Test Failed! ---')
+    console.error(error)
   }
 }
 
-testGemini();
+testGemini()

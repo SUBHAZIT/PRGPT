@@ -4,14 +4,14 @@ export class TokenLimits {
   responseTokens: number
   knowledgeCutOff: string
 
-  constructor(model = 'gemini-1.5-flash') {
+  constructor(model = 'gpt-4o-mini') {
     this.knowledgeCutOff = '2023-11-01'
-    if (model.includes('gemini-1.5-pro')) {
-      this.maxTokens = 2000000
-      this.responseTokens = 8000
-    } else if (model.includes('gemini-1.5-flash')) {
-      this.maxTokens = 1000000
-      this.responseTokens = 4000
+    if (model.includes('gpt-4o') && !model.includes('mini')) {
+      this.maxTokens = 128000
+      this.responseTokens = 16000
+    } else if (model.includes('gpt-4o-mini')) {
+      this.maxTokens = 128000
+      this.responseTokens = 16000
     } else if (model === 'gpt-4-32k') {
       this.maxTokens = 32600
       this.responseTokens = 4000

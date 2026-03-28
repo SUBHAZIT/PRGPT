@@ -1,4 +1,4 @@
-import * as core from '@actions/core'
+import {info} from '@actions/core'
 import {minimatch} from 'minimatch'
 import {TokenLimits} from './limits'
 
@@ -11,12 +11,12 @@ export class Options {
   reviewCommentLGTM: boolean
   pathFilters: PathFilter
   systemMessage: string
-  geminiLightModel: string
-  geminiHeavyModel: string
-  geminiModelTemperature: number
-  geminiRetries: number
-  geminiTimeoutMS: number
-  geminiConcurrencyLimit: number
+  openaiLightModel: string
+  openaiHeavyModel: string
+  openaiModelTemperature: number
+  openaiRetries: number
+  openaiTimeoutMS: number
+  openaiConcurrencyLimit: number
   githubConcurrencyLimit: number
   lightTokenLimits: TokenLimits
   heavyTokenLimits: TokenLimits
@@ -31,12 +31,12 @@ export class Options {
     reviewCommentLGTM = false,
     pathFilters: string[] | null = null,
     systemMessage = '',
-    geminiLightModel = 'gemini-1.5-flash',
-    geminiHeavyModel = 'gemini-1.5-pro',
-    geminiModelTemperature = '0.7',
-    geminiRetries = '3',
-    geminiTimeoutMS = '120000',
-    geminiConcurrencyLimit = '6',
+    openaiLightModel = 'gpt-4o-mini',
+    openaiHeavyModel = 'gpt-4o',
+    openaiModelTemperature = '0.7',
+    openaiRetries = '3',
+    openaiTimeoutMS = '120000',
+    openaiConcurrencyLimit = '6',
     githubConcurrencyLimit = '6',
     language = 'en-US'
   ) {
@@ -48,43 +48,43 @@ export class Options {
     this.reviewCommentLGTM = reviewCommentLGTM
     this.pathFilters = new PathFilter(pathFilters)
     this.systemMessage = systemMessage
-    this.geminiLightModel = geminiLightModel
-    this.geminiHeavyModel = geminiHeavyModel
-    this.geminiModelTemperature = parseFloat(geminiModelTemperature)
-    this.geminiRetries = parseInt(geminiRetries)
-    this.geminiTimeoutMS = parseInt(geminiTimeoutMS)
-    this.geminiConcurrencyLimit = parseInt(geminiConcurrencyLimit)
+    this.openaiLightModel = openaiLightModel
+    this.openaiHeavyModel = openaiHeavyModel
+    this.openaiModelTemperature = parseFloat(openaiModelTemperature)
+    this.openaiRetries = parseInt(openaiRetries)
+    this.openaiTimeoutMS = parseInt(openaiTimeoutMS)
+    this.openaiConcurrencyLimit = parseInt(openaiConcurrencyLimit)
     this.githubConcurrencyLimit = parseInt(githubConcurrencyLimit)
-    this.lightTokenLimits = new TokenLimits(this.geminiLightModel)
-    this.heavyTokenLimits = new TokenLimits(this.geminiHeavyModel)
+    this.lightTokenLimits = new TokenLimits(this.openaiLightModel)
+    this.heavyTokenLimits = new TokenLimits(this.openaiHeavyModel)
     this.language = language
   }
 
-  // print all options using core.info
+  // print all options using info
   print(): void {
-    core.info(`debug: ${this.debug}`)
-    core.info(`disable_review: ${this.disableReview}`)
-    core.info(`disable_release_notes: ${this.disableReleaseNotes}`)
-    core.info(`max_files: ${this.maxFiles}`)
-    core.info(`review_simple_changes: ${this.reviewSimpleChanges}`)
-    core.info(`review_comment_lgtm: ${this.reviewCommentLGTM}`)
-    core.info(`path_filters: ${this.pathFilters}`)
-    core.info(`system_message: ${this.systemMessage}`)
-    core.info(`gemini_light_model: ${this.geminiLightModel}`)
-    core.info(`gemini_heavy_model: ${this.geminiHeavyModel}`)
-    core.info(`gemini_model_temperature: ${this.geminiModelTemperature}`)
-    core.info(`gemini_retries: ${this.geminiRetries}`)
-    core.info(`gemini_timeout_ms: ${this.geminiTimeoutMS}`)
-    core.info(`gemini_concurrency_limit: ${this.geminiConcurrencyLimit}`)
-    core.info(`github_concurrency_limit: ${this.githubConcurrencyLimit}`)
-    core.info(`summary_token_limits: ${this.lightTokenLimits.string()}`)
-    core.info(`review_token_limits: ${this.heavyTokenLimits.string()}`)
-    core.info(`language: ${this.language}`)
+    info(`debug: ${this.debug}`)
+    info(`disable_review: ${this.disableReview}`)
+    info(`disable_release_notes: ${this.disableReleaseNotes}`)
+    info(`max_files: ${this.maxFiles}`)
+    info(`review_simple_changes: ${this.reviewSimpleChanges}`)
+    info(`review_comment_lgtm: ${this.reviewCommentLGTM}`)
+    info(`path_filters: ${this.pathFilters}`)
+    info(`system_message: ${this.systemMessage}`)
+    info(`openai_light_model: ${this.openaiLightModel}`)
+    info(`openai_heavy_model: ${this.openaiHeavyModel}`)
+    info(`openai_model_temperature: ${this.openaiModelTemperature}`)
+    info(`openai_retries: ${this.openaiRetries}`)
+    info(`openai_timeout_ms: ${this.openaiTimeoutMS}`)
+    info(`openai_concurrency_limit: ${this.openaiConcurrencyLimit}`)
+    info(`github_concurrency_limit: ${this.githubConcurrencyLimit}`)
+    info(`summary_token_limits: ${this.lightTokenLimits.string()}`)
+    info(`review_token_limits: ${this.heavyTokenLimits.string()}`)
+    info(`language: ${this.language}`)
   }
 
   checkPath(path: string): boolean {
     const ok = this.pathFilters.check(path)
-    core.info(`checking path: ${path} => ${ok}`)
+    info(`checking path: ${path} => ${ok}`)
     return ok
   }
 }
@@ -134,11 +134,11 @@ export class PathFilter {
   }
 }
 
-export class GeminiOptions {
+export class OpenAIOptions {
   model: string
   tokenLimits: TokenLimits
 
-  constructor(model = 'gemini-1.5-flash', tokenLimits: TokenLimits | null = null) {
+  constructor(model = 'gpt-4o-mini', tokenLimits: TokenLimits | null = null) {
     this.model = model
     if (tokenLimits != null) {
       this.tokenLimits = tokenLimits

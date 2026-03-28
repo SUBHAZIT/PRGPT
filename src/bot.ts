@@ -1,51 +1,27 @@
-import {info, setFailed, warning} from '@actions/core'
-import {
-  GoogleGenerativeAI,
-  GenerativeModel,
-  ChatSession,
-  Content,
-  Part
-} from '@google/generative-ai'
+import {info, warning} from '@actions/core'
+import OpenAI from 'openai'
 import pRetry from 'p-retry'
-import {GeminiOptions, Options} from './options'
+import {OpenAIOptions, Options} from './options'
 
-// define type to save state if needed, though Gemini manages history
 export interface Ids {
   parentMessageId?: string
   conversationId?: string
 }
 
 export class Bot {
-  private readonly api: GoogleGenerativeAI
-  private readonly model: GenerativeModel
+  private readonly api: OpenAI
   private readonly options: Options
-  private readonly geminiOptions: GeminiOptions
-  private readonly chatSessions: Map<string, ChatSession> = new Map()
+  private readonly openaiOptions: OpenAIOptions
 
-  constructor(options: Options, geminiOptions: GeminiOptions) {
+  constructor(options: Options, openaiOptions: OpenAIOptions) {
     this.options = options
-    this.geminiOptions = geminiOptions
-    const apiKey = process.env.GEMINI_API_KEY
+    this.openaiOptions = openaiOptions
+    const apiKey = process.env.OPENAI_API_KEY
     if (apiKey) {
-      this.api = new GoogleGenerativeAI(apiKey)
-      const currentDate = new Date().toISOString().split('T')[0]
-      const systemMessage = `${options.systemMessage} 
-Knowledge cutoff: ${geminiOptions.tokenLimits.knowledgeCutOff}
-Current date: ${currentDate}
-
-IMPORTANT: Entire response must be in the language with ISO code: ${options.language}
-`
-      this.model = this.api.getGenerativeModel({
-        model: geminiOptions.model,
-        systemInstruction: systemMessage,
-        generationConfig: {
-          temperature: options.geminiModelTemperature,
-          maxOutputTokens: geminiOptions.tokenLimits.responseTokens
-        }
-      })
+      this.api = new OpenAI({apiKey})
     } else {
       const err =
-        "Unable to initialize the Gemini API, 'GEMINI_API_KEY' environment variable is not available"
+        "Unable to initialize the OpenAI API, 'OPENAI_API_KEY' environment variable is not available"
       throw new Error(err)
     }
   }
@@ -65,7 +41,6 @@ IMPORTANT: Entire response must be in the language with ISO code: ${options.lang
     message: string,
     ids: Ids
   ): Promise<[string, Ids]> => {
-    // record timing
     const start = Date.now()
     if (!message) {
       return ['', {}]
@@ -74,49 +49,61 @@ IMPORTANT: Entire response must be in the language with ISO code: ${options.lang
     let responseText = ''
 
     try {
-      // Use conversationId as a key for chat session if available
-      const sessionKey = ids.conversationId || 'default'
-      let chatSession = this.chatSessions.get(sessionKey)
-      if (!chatSession) {
-        chatSession = this.model.startChat()
-        this.chatSessions.set(sessionKey, chatSession)
-      }
+      const currentDate = new Date().toISOString().split('T')[0]
+      const systemMessage = `${this.options.systemMessage} 
+Knowledge cutoff: ${this.openaiOptions.tokenLimits.knowledgeCutOff}
+Current date: ${currentDate}
+
+IMPORTANT: Entire response must be in the language with ISO code: ${this.options.language}
+`
 
       const result = await pRetry(
         async () => {
-          const res = await chatSession!.sendMessage(message)
-          return res.response
+          const res = await this.api.chat.completions.create({
+            model: this.openaiOptions.model,
+            temperature: this.options.openaiModelTemperature,
+            messages: [
+              {role: 'system', content: systemMessage},
+              {role: 'user', content: message}
+            ]
+          })
+
+          if (res.choices.length > 0 && res.choices[0].message?.content) {
+            return res.choices[0].message.content
+          }
+          return ''
         },
         {
-          retries: this.options.geminiRetries
+          retries: this.options.openaiRetries
         }
       )
 
-      responseText = result.text()
+      responseText = result
     } catch (e: any) {
-      info(`failed to send message to gemini: ${e}, backtrace: ${e.stack}`)
+      info(`failed to send message to openai: ${e}, backtrace: ${e.stack}`)
     }
 
     const end = Date.now()
-    info(`gemini sendMessage (including retries) response time: ${end - start} ms`)
+    info(
+      `openai sendMessage (including retries) response time: ${end - start} ms`
+    )
 
     if (responseText === '') {
-      warning('gemini response is empty')
+      warning('openai response is empty')
     }
 
-    // remove the prefix "with " in the response (behavior from previous bot)
     if (responseText.startsWith('with ')) {
       responseText = responseText.substring(5)
     }
 
     if (this.options.debug) {
-      info(`gemini responses: ${responseText}`)
+      info(`openai responses: \n${responseText}`)
     }
 
-    // We don't have separate IDs like chatgpt library, so we'll just return a random ID for now or re-use conversationId
     const newIds: Ids = {
       parentMessageId: Math.random().toString(36).substring(7),
-      conversationId: ids.conversationId || Math.random().toString(36).substring(7)
+      conversationId:
+        ids.conversationId || Math.random().toString(36).substring(7)
     }
     return [responseText, newIds]
   }
