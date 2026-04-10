@@ -107,5 +107,4 @@ $ npm run build && npm run package
 
 ## Disclaimer
 
-- Your code will be sent to Google's servers for processing.
- - your code will be processed by open ai api.
+- Your code will be sent to OpenAI's servers for processing.
