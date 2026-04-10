@@ -41,23 +41,37 @@ export class Options {
     language = 'en-US'
   ) {
     this.debug = debug
-    this.disableReview = disableReview
-    this.disableReleaseNotes = disableReleaseNotes
-    this.maxFiles = parseInt(maxFiles)
-    this.reviewSimpleChanges = reviewSimpleChanges
-    this.reviewCommentLGTM = reviewCommentLGTM
-    this.pathFilters = new PathFilter(pathFilters)
-    this.systemMessage = systemMessage
-    this.openaiLightModel = openaiLightModel
-    this.openaiHeavyModel = openaiHeavyModel
-    this.openaiModelTemperature = parseFloat(openaiModelTemperature)
-    this.openaiRetries = parseInt(openaiRetries)
-    this.openaiTimeoutMS = parseInt(openaiTimeoutMS)
-    this.openaiConcurrencyLimit = parseInt(openaiConcurrencyLimit)
-    this.githubConcurrencyLimit = parseInt(githubConcurrencyLimit)
+    this.disableReview =
+      process.env.DISABLE_REVIEW === 'true' || disableReview
+    this.disableReleaseNotes =
+      process.env.DISABLE_RELEASE_NOTES === 'true' || disableReleaseNotes
+    this.maxFiles = parseInt(process.env.MAX_FILES || maxFiles)
+    this.reviewSimpleChanges =
+      process.env.REVIEW_SIMPLE_CHANGES === 'true' || reviewSimpleChanges
+    this.reviewCommentLGTM =
+      process.env.REVIEW_COMMENT_LGTM === 'true' || reviewCommentLGTM
+    this.pathFilters = new PathFilter(
+      pathFilters || process.env.PATH_FILTERS?.split('\n') || null
+    )
+    this.systemMessage = process.env.SYSTEM_MESSAGE || systemMessage
+    this.openaiLightModel = process.env.OPENAI_LIGHT_MODEL || openaiLightModel
+    this.openaiHeavyModel = process.env.OPENAI_HEAVY_MODEL || openaiHeavyModel
+    this.openaiModelTemperature = parseFloat(
+      process.env.OPENAI_MODEL_TEMPERATURE || openaiModelTemperature
+    )
+    this.openaiRetries = parseInt(process.env.OPENAI_RETRIES || openaiRetries)
+    this.openaiTimeoutMS = parseInt(
+      process.env.OPENAI_TIMEOUT_MS || openaiTimeoutMS
+    )
+    this.openaiConcurrencyLimit = parseInt(
+      process.env.OPENAI_CONCURRENCY_LIMIT || openaiConcurrencyLimit
+    )
+    this.githubConcurrencyLimit = parseInt(
+      process.env.GITHUB_CONCURRENCY_LIMIT || githubConcurrencyLimit
+    )
     this.lightTokenLimits = new TokenLimits(this.openaiLightModel)
     this.heavyTokenLimits = new TokenLimits(this.openaiHeavyModel)
-    this.language = language
+    this.language = process.env.LANGUAGE || language
   }
 
   // print all options using info

@@ -10,8 +10,18 @@ import {OpenAIOptions, Options} from './options'
 import {Prompts} from './prompts'
 import {codeReview} from './review'
 import {handleReviewComment} from './review-comment'
+import {getActionOctokit} from './octokit'
+
+import {context as github_context} from '@actions/github'
 
 async function run(): Promise<void> {
+  const repo = github_context.repo
+  const octokit = getActionOctokit()
+
+  if (!octokit) {
+    warning('Skipped: GITHUB_TOKEN is not available')
+    return
+  }
   const options: Options = new Options(
     getBooleanInput('debug'),
     getBooleanInput('disable_review'),
@@ -73,11 +83,26 @@ async function run(): Promise<void> {
       process.env.GITHUB_EVENT_NAME === 'pull_request' ||
       process.env.GITHUB_EVENT_NAME === 'pull_request_target'
     ) {
-      await codeReview(lightBot, heavyBot, options, prompts)
+      await codeReview(
+        lightBot,
+        heavyBot,
+        options,
+        prompts,
+        github_context,
+        repo,
+        octokit
+      )
     } else if (
       process.env.GITHUB_EVENT_NAME === 'pull_request_review_comment'
     ) {
-      await handleReviewComment(heavyBot, options, prompts)
+      await handleReviewComment(
+        heavyBot,
+        options,
+        prompts,
+        github_context,
+        repo,
+        octokit
+      )
     } else {
       warning('Skipped: this action only works on push events or pull_request')
     }
