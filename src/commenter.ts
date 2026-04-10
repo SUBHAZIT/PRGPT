@@ -376,6 +376,38 @@ ${statusMsg}
     }
   }
 
+  async rejectPR(
+    pullNumber: number,
+    commitId: string,
+    message: string,
+    repo: {owner: string; repo: string}
+  ) {
+    const body = `${COMMENT_GREETING}\n\n🚨 **SECURITY WARNING: Sensitive File Detected** 🚨\n\n${message}`
+    try {
+      // 1. Submit a requested changes review
+      await this.octokit.pulls.createReview({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: pullNumber,
+        commit_id: commitId,
+        event: 'REQUEST_CHANGES',
+        body
+      })
+      info(`Successfully submitted REQUEST_CHANGES review for PR #${pullNumber}`)
+      
+      // 2. Close the PR automatically
+      await this.octokit.pulls.update({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: pullNumber,
+        state: 'closed'
+      })
+      info(`Successfully closed PR #${pullNumber} due to security violation`)
+    } catch (e) {
+      warning(`Failed to reject/close PR: ${e}`)
+    }
+  }
+
   async reviewCommentReply(
     pullNumber: number,
     topLevelComment: any,

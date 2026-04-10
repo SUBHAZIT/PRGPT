@@ -107,12 +107,6 @@ exports.Bot = Bot;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Commenter = exports.COMMIT_ID_END_TAG = exports.COMMIT_ID_START_TAG = exports.SHORT_SUMMARY_END_TAG = exports.SHORT_SUMMARY_START_TAG = exports.RAW_SUMMARY_END_TAG = exports.RAW_SUMMARY_START_TAG = exports.DESCRIPTION_END_TAG = exports.DESCRIPTION_START_TAG = exports.IN_PROGRESS_END_TAG = exports.IN_PROGRESS_START_TAG = exports.SUMMARIZE_TAG = exports.COMMENT_REPLY_TAG = exports.COMMENT_TAG = exports.COMMENT_GREETING = void 0;
 const core_1 = __nccwpck_require__(2186);
-// eslint-disable-next-line camelcase
-const github_1 = __nccwpck_require__(5438);
-const octokit_1 = __nccwpck_require__(3258);
-// eslint-disable-next-line camelcase
-const context = github_1.context;
-const repo = context.repo;
 exports.COMMENT_GREETING = `${(0, core_1.getInput)('bot_icon')}   PRGPT`;
 exports.COMMENT_TAG = '<!-- This is an auto-generated comment by PRGPT -->';
 exports.COMMENT_REPLY_TAG = '<!-- This is an auto-generated reply by PRGPT -->';
@@ -134,10 +128,11 @@ exports.SHORT_SUMMARY_END_TAG = `-->
 exports.COMMIT_ID_START_TAG = '<!-- commit_ids_reviewed_start -->';
 exports.COMMIT_ID_END_TAG = '<!-- commit_ids_reviewed_end -->';
 class Commenter {
-    /**
-     * @param mode Can be "create", "replace". Default is "replace".
-     */
-    async comment(message, tag, mode) {
+    octokit;
+    constructor(octokit) {
+        this.octokit = octokit;
+    }
+    async comment(message, tag, mode, context, repo) {
         let target;
         if (context.payload.pull_request != null) {
             target = context.payload.pull_request.number;
@@ -158,14 +153,14 @@ ${message}
 
 ${tag}`;
         if (mode === 'create') {
-            await this.create(body, target);
+            await this.create(body, target, repo);
         }
         else if (mode === 'replace') {
-            await this.replace(body, tag, target);
+            await this.replace(body, tag, target, repo);
         }
         else {
             (0, core_1.warning)(`Unknown mode: ${mode}, use "replace" instead`);
-            await this.replace(body, tag, target);
+            await this.replace(body, tag, target, repo);
         }
     }
     getContentWithinTags(content, startTag, endTag) {
@@ -197,12 +192,12 @@ ${tag}`;
         const releaseNotes = this.getContentWithinTags(description, exports.DESCRIPTION_START_TAG, exports.DESCRIPTION_END_TAG);
         return releaseNotes.replace(/(^|\n)> .*/g, '');
     }
-    async updateDescription(pullNumber, message) {
+    async updateDescription(pullNumber, message, repo) {
         // add this response to the description field of the PR as release notes by looking
         // for the tag (marker)
         try {
             // get latest description from PR
-            const pr = await octokit_1.octokit.pulls.get({
+            const pr = await this.octokit.pulls.get({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -215,7 +210,7 @@ ${tag}`;
             const description = this.getDescription(body);
             const messageClean = this.removeContentWithinTags(message, exports.DESCRIPTION_START_TAG, exports.DESCRIPTION_END_TAG);
             const newDescription = `${description}\n${exports.DESCRIPTION_START_TAG}\n${messageClean}\n${exports.DESCRIPTION_END_TAG}`;
-            await octokit_1.octokit.pulls.update({
+            await this.octokit.pulls.update({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -241,9 +236,9 @@ ${exports.COMMENT_TAG}`;
             message
         });
     }
-    async deletePendingReview(pullNumber) {
+    async deletePendingReview(pullNumber, repo) {
         try {
-            const reviews = await octokit_1.octokit.pulls.listReviews({
+            const reviews = await this.octokit.pulls.listReviews({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -253,7 +248,7 @@ ${exports.COMMENT_TAG}`;
             if (pendingReview) {
                 (0, core_1.info)(`Deleting pending review for PR #${pullNumber} id: ${pendingReview.id}`);
                 try {
-                    await octokit_1.octokit.pulls.deletePendingReview({
+                    await this.octokit.pulls.deletePendingReview({
                         owner: repo.owner,
                         repo: repo.repo,
                         // eslint-disable-next-line camelcase
@@ -271,7 +266,7 @@ ${exports.COMMENT_TAG}`;
             (0, core_1.warning)(`Failed to list reviews: ${e}`);
         }
     }
-    async submitReview(pullNumber, commitId, statusMsg) {
+    async submitReview(pullNumber, commitId, statusMsg, repo) {
         const body = `${exports.COMMENT_GREETING}
 
 ${statusMsg}
@@ -280,7 +275,7 @@ ${statusMsg}
             // Submit empty review with statusMsg
             (0, core_1.info)(`Submitting empty review for PR #${pullNumber}`);
             try {
-                await octokit_1.octokit.pulls.createReview({
+                await this.octokit.pulls.createReview({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -297,12 +292,12 @@ ${statusMsg}
             return;
         }
         for (const comment of this.reviewCommentsBuffer) {
-            const comments = await this.getCommentsAtRange(pullNumber, comment.path, comment.startLine, comment.endLine);
+            const comments = await this.getCommentsAtRange(pullNumber, comment.path, comment.startLine, comment.endLine, repo);
             for (const c of comments) {
                 if (c.body.includes(exports.COMMENT_TAG)) {
                     (0, core_1.info)(`Deleting review comment for ${comment.path}:${comment.startLine}-${comment.endLine}: ${comment.message}`);
                     try {
-                        await octokit_1.octokit.pulls.deleteReviewComment({
+                        await this.octokit.pulls.deleteReviewComment({
                             owner: repo.owner,
                             repo: repo.repo,
                             // eslint-disable-next-line camelcase
@@ -315,7 +310,7 @@ ${statusMsg}
                 }
             }
         }
-        await this.deletePendingReview(pullNumber);
+        await this.deletePendingReview(pullNumber, repo);
         const generateCommentData = (comment) => {
             const commentData = {
                 path: comment.path,
@@ -331,7 +326,7 @@ ${statusMsg}
             return commentData;
         };
         try {
-            const review = await octokit_1.octokit.pulls.createReview({
+            const review = await this.octokit.pulls.createReview({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -341,7 +336,7 @@ ${statusMsg}
                 comments: this.reviewCommentsBuffer.map(comment => generateCommentData(comment))
             });
             (0, core_1.info)(`Submitting review for PR #${pullNumber}, total comments: ${this.reviewCommentsBuffer.length}, review id: ${review.data.id}`);
-            await octokit_1.octokit.pulls.submitReview({
+            await this.octokit.pulls.submitReview({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -354,7 +349,7 @@ ${statusMsg}
         }
         catch (e) {
             (0, core_1.warning)(`Failed to create review: ${e}. Falling back to individual comments.`);
-            await this.deletePendingReview(pullNumber);
+            await this.deletePendingReview(pullNumber, repo);
             let commentCounter = 0;
             for (const comment of this.reviewCommentsBuffer) {
                 (0, core_1.info)(`Creating new review comment for ${comment.path}:${comment.startLine}-${comment.endLine}: ${comment.message}`);
@@ -368,7 +363,7 @@ ${statusMsg}
                     ...generateCommentData(comment)
                 };
                 try {
-                    await octokit_1.octokit.pulls.createReviewComment(commentData);
+                    await this.octokit.pulls.createReviewComment(commentData);
                 }
                 catch (ee) {
                     (0, core_1.warning)(`Failed to create review comment: ${ee}`);
@@ -378,7 +373,33 @@ ${statusMsg}
             }
         }
     }
-    async reviewCommentReply(pullNumber, topLevelComment, message) {
+    async rejectPR(pullNumber, commitId, message, repo) {
+        const body = `${exports.COMMENT_GREETING}\n\n🚨 **SECURITY WARNING: Sensitive File Detected** 🚨\n\n${message}`;
+        try {
+            // 1. Submit a requested changes review
+            await this.octokit.pulls.createReview({
+                owner: repo.owner,
+                repo: repo.repo,
+                pull_number: pullNumber,
+                commit_id: commitId,
+                event: 'REQUEST_CHANGES',
+                body
+            });
+            (0, core_1.info)(`Successfully submitted REQUEST_CHANGES review for PR #${pullNumber}`);
+            // 2. Close the PR automatically
+            await this.octokit.pulls.update({
+                owner: repo.owner,
+                repo: repo.repo,
+                pull_number: pullNumber,
+                state: 'closed'
+            });
+            (0, core_1.info)(`Successfully closed PR #${pullNumber} due to security violation`);
+        }
+        catch (e) {
+            (0, core_1.warning)(`Failed to reject/close PR: ${e}`);
+        }
+    }
+    async reviewCommentReply(pullNumber, topLevelComment, message, repo) {
         const reply = `${exports.COMMENT_GREETING}
 
 ${message}
@@ -387,7 +408,7 @@ ${exports.COMMENT_REPLY_TAG}
 `;
         try {
             // Post the reply to the user comment
-            await octokit_1.octokit.pulls.createReplyForReviewComment({
+            await this.octokit.pulls.createReplyForReviewComment({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -400,7 +421,7 @@ ${exports.COMMENT_REPLY_TAG}
         catch (error) {
             (0, core_1.warning)(`Failed to reply to the top-level comment ${error}`);
             try {
-                await octokit_1.octokit.pulls.createReplyForReviewComment({
+                await this.octokit.pulls.createReplyForReviewComment({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -418,7 +439,7 @@ ${exports.COMMENT_REPLY_TAG}
             if (topLevelComment.body.includes(exports.COMMENT_TAG)) {
                 // replace COMMENT_TAG with COMMENT_REPLY_TAG in topLevelComment
                 const newBody = topLevelComment.body.replace(exports.COMMENT_TAG, exports.COMMENT_REPLY_TAG);
-                await octokit_1.octokit.pulls.updateReviewComment({
+                await this.octokit.pulls.updateReviewComment({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -431,8 +452,8 @@ ${exports.COMMENT_REPLY_TAG}
             (0, core_1.warning)(`Failed to update the top-level comment ${error}`);
         }
     }
-    async getCommentsWithinRange(pullNumber, path, startLine, endLine) {
-        const comments = await this.listReviewComments(pullNumber);
+    async getCommentsWithinRange(pullNumber, path, startLine, endLine, repo) {
+        const comments = await this.listReviewComments(pullNumber, repo);
         return comments.filter((comment) => comment.path === path &&
             comment.body !== '' &&
             ((comment.start_line !== undefined &&
@@ -440,8 +461,8 @@ ${exports.COMMENT_REPLY_TAG}
                 comment.line <= endLine) ||
                 (startLine === endLine && comment.line === endLine)));
     }
-    async getCommentsAtRange(pullNumber, path, startLine, endLine) {
-        const comments = await this.listReviewComments(pullNumber);
+    async getCommentsAtRange(pullNumber, path, startLine, endLine, repo) {
+        const comments = await this.listReviewComments(pullNumber, repo);
         return comments.filter((comment) => comment.path === path &&
             comment.body !== '' &&
             ((comment.start_line !== undefined &&
@@ -449,8 +470,8 @@ ${exports.COMMENT_REPLY_TAG}
                 comment.line === endLine) ||
                 (startLine === endLine && comment.line === endLine)));
     }
-    async getCommentChainsWithinRange(pullNumber, path, startLine, endLine, tag = '') {
-        const existingComments = await this.getCommentsWithinRange(pullNumber, path, startLine, endLine);
+    async getCommentChainsWithinRange(pullNumber, path, startLine, endLine, repo, tag = '') {
+        const existingComments = await this.getCommentsWithinRange(pullNumber, path, startLine, endLine, repo);
         // find all top most comments
         const topLevelComments = [];
         for (const comment of existingComments) {
@@ -480,9 +501,9 @@ ${chain}
         conversationChain.unshift(`${topLevelComment.user.login}: ${topLevelComment.body}`);
         return conversationChain.join('\n---\n');
     }
-    async getCommentChain(pullNumber, comment) {
+    async getCommentChain(pullNumber, comment, repo) {
         try {
-            const reviewComments = await this.listReviewComments(pullNumber);
+            const reviewComments = await this.listReviewComments(pullNumber, repo);
             const topLevelComment = await this.getTopLevelComment(reviewComments, comment);
             const chain = await this.composeCommentChain(reviewComments, topLevelComment);
             return { chain, topLevelComment };
@@ -509,7 +530,7 @@ ${chain}
         return topLevelComment;
     }
     reviewCommentsCache = {};
-    async listReviewComments(target) {
+    async listReviewComments(target, repo) {
         if (this.reviewCommentsCache[target]) {
             return this.reviewCommentsCache[target];
         }
@@ -517,7 +538,7 @@ ${chain}
         let page = 1;
         try {
             for (;;) {
-                const { data: comments } = await octokit_1.octokit.pulls.listReviewComments({
+                const { data: comments } = await this.octokit.pulls.listReviewComments({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -540,10 +561,10 @@ ${chain}
             return allComments;
         }
     }
-    async create(body, target) {
+    async create(body, target, repo) {
         try {
             // get comment ID from the response
-            const response = await octokit_1.octokit.issues.createComment({
+            const response = await this.octokit.issues.createComment({
                 owner: repo.owner,
                 repo: repo.repo,
                 // eslint-disable-next-line camelcase
@@ -562,11 +583,11 @@ ${chain}
             (0, core_1.warning)(`Failed to create comment: ${e}`);
         }
     }
-    async replace(body, tag, target) {
+    async replace(body, tag, target, repo) {
         try {
-            const cmt = await this.findCommentWithTag(tag, target);
+            const cmt = await this.findCommentWithTag(tag, target, repo);
             if (cmt) {
-                await octokit_1.octokit.issues.updateComment({
+                await this.octokit.issues.updateComment({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -575,16 +596,16 @@ ${chain}
                 });
             }
             else {
-                await this.create(body, target);
+                await this.create(body, target, repo);
             }
         }
         catch (e) {
             (0, core_1.warning)(`Failed to replace comment: ${e}`);
         }
     }
-    async findCommentWithTag(tag, target) {
+    async findCommentWithTag(tag, target, repo) {
         try {
-            const comments = await this.listComments(target);
+            const comments = await this.listComments(target, repo);
             for (const cmt of comments) {
                 if (cmt.body && cmt.body.includes(tag)) {
                     return cmt;
@@ -598,7 +619,7 @@ ${chain}
         }
     }
     issueCommentsCache = {};
-    async listComments(target) {
+    async listComments(target, repo) {
         if (this.issueCommentsCache[target]) {
             return this.issueCommentsCache[target];
         }
@@ -606,7 +627,7 @@ ${chain}
         let page = 1;
         try {
             for (;;) {
-                const { data: comments } = await octokit_1.octokit.issues.listComments({
+                const { data: comments } = await this.octokit.issues.listComments({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -675,13 +696,13 @@ ${chain}
         }
         return '';
     }
-    async getAllCommitIds() {
+    async getAllCommitIds(context, repo) {
         const allCommits = [];
         let page = 1;
         let commits;
         if (context && context.payload && context.payload.pull_request != null) {
             do {
-                commits = await octokit_1.octokit.pulls.listCommits({
+                commits = await this.octokit.pulls.listCommits({
                     owner: repo.owner,
                     repo: repo.repo,
                     // eslint-disable-next-line camelcase
@@ -876,37 +897,41 @@ exports.TokenLimits = TokenLimits;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.octokit = void 0;
+exports.getActionOctokit = void 0;
 const core_1 = __nccwpck_require__(2186);
 const action_1 = __nccwpck_require__(1231);
 const plugin_retry_1 = __nccwpck_require__(6298);
 const plugin_throttling_1 = __nccwpck_require__(9968);
-const token = (0, core_1.getInput)('token') || process.env.GITHUB_TOKEN;
-const RetryAndThrottlingOctokit = action_1.Octokit.plugin(plugin_throttling_1.throttling, plugin_retry_1.retry);
-exports.octokit = new RetryAndThrottlingOctokit({
-    auth: `token ${token}`,
-    throttle: {
-        onRateLimit: (retryAfter, options, _o, retryCount) => {
-            (0, core_1.warning)(`Request quota exhausted for request ${options.method} ${options.url}
+function getActionOctokit() {
+    const token = (0, core_1.getInput)('token') || process.env.GITHUB_TOKEN;
+    if (!token)
+        return null;
+    const RetryAndThrottlingOctokit = action_1.Octokit.plugin(plugin_throttling_1.throttling, plugin_retry_1.retry);
+    return new RetryAndThrottlingOctokit({
+        auth: `token ${token}`,
+        throttle: {
+            onRateLimit: (retryAfter, options, _o, retryCount) => {
+                (0, core_1.warning)(`Request quota exhausted for request ${options.method} ${options.url}
 Retry after: ${retryAfter} seconds
 Retry count: ${retryCount}
 `);
-            if (retryCount <= 3) {
-                (0, core_1.warning)(`Retrying after ${retryAfter} seconds!`);
+                if (retryCount <= 3) {
+                    (0, core_1.warning)(`Retrying after ${retryAfter} seconds!`);
+                    return true;
+                }
+            },
+            onSecondaryRateLimit: (retryAfter, options) => {
+                (0, core_1.warning)(`SecondaryRateLimit detected for request ${options.method} ${options.url} ; retry after ${retryAfter} seconds`);
+                if (options.method === 'POST' &&
+                    options.url.match(/\/repos\/.*\/.*\/pulls\/.*\/reviews/)) {
+                    return false;
+                }
                 return true;
             }
-        },
-        onSecondaryRateLimit: (retryAfter, options) => {
-            (0, core_1.warning)(`SecondaryRateLimit detected for request ${options.method} ${options.url} ; retry after ${retryAfter} seconds`);
-            // if we are doing a POST method on /repos/{owner}/{repo}/pulls/{pull_number}/reviews then we shouldn't retry
-            if (options.method === 'POST' &&
-                options.url.match(/\/repos\/.*\/.*\/pulls\/.*\/reviews/)) {
-                return false;
-            }
-            return true;
         }
-    }
-});
+    });
+}
+exports.getActionOctokit = getActionOctokit;
 
 
 /***/ }),
@@ -942,23 +967,27 @@ class Options {
     language;
     constructor(debug, disableReview, disableReleaseNotes, maxFiles = '0', reviewSimpleChanges = false, reviewCommentLGTM = false, pathFilters = null, systemMessage = '', openaiLightModel = 'gpt-4o-mini', openaiHeavyModel = 'gpt-4o', openaiModelTemperature = '0.7', openaiRetries = '3', openaiTimeoutMS = '120000', openaiConcurrencyLimit = '6', githubConcurrencyLimit = '6', language = 'en-US') {
         this.debug = debug;
-        this.disableReview = disableReview;
-        this.disableReleaseNotes = disableReleaseNotes;
-        this.maxFiles = parseInt(maxFiles);
-        this.reviewSimpleChanges = reviewSimpleChanges;
-        this.reviewCommentLGTM = reviewCommentLGTM;
-        this.pathFilters = new PathFilter(pathFilters);
-        this.systemMessage = systemMessage;
-        this.openaiLightModel = openaiLightModel;
-        this.openaiHeavyModel = openaiHeavyModel;
-        this.openaiModelTemperature = parseFloat(openaiModelTemperature);
-        this.openaiRetries = parseInt(openaiRetries);
-        this.openaiTimeoutMS = parseInt(openaiTimeoutMS);
-        this.openaiConcurrencyLimit = parseInt(openaiConcurrencyLimit);
-        this.githubConcurrencyLimit = parseInt(githubConcurrencyLimit);
+        this.disableReview =
+            process.env.DISABLE_REVIEW === 'true' || disableReview;
+        this.disableReleaseNotes =
+            process.env.DISABLE_RELEASE_NOTES === 'true' || disableReleaseNotes;
+        this.maxFiles = parseInt(process.env.MAX_FILES || maxFiles);
+        this.reviewSimpleChanges =
+            process.env.REVIEW_SIMPLE_CHANGES === 'true' || reviewSimpleChanges;
+        this.reviewCommentLGTM =
+            process.env.REVIEW_COMMENT_LGTM === 'true' || reviewCommentLGTM;
+        this.pathFilters = new PathFilter(pathFilters || process.env.PATH_FILTERS?.split('\n') || null);
+        this.systemMessage = process.env.SYSTEM_MESSAGE || systemMessage;
+        this.openaiLightModel = process.env.OPENAI_LIGHT_MODEL || openaiLightModel;
+        this.openaiHeavyModel = process.env.OPENAI_HEAVY_MODEL || openaiHeavyModel;
+        this.openaiModelTemperature = parseFloat(process.env.OPENAI_MODEL_TEMPERATURE || openaiModelTemperature);
+        this.openaiRetries = parseInt(process.env.OPENAI_RETRIES || openaiRetries);
+        this.openaiTimeoutMS = parseInt(process.env.OPENAI_TIMEOUT_MS || openaiTimeoutMS);
+        this.openaiConcurrencyLimit = parseInt(process.env.OPENAI_CONCURRENCY_LIMIT || openaiConcurrencyLimit);
+        this.githubConcurrencyLimit = parseInt(process.env.GITHUB_CONCURRENCY_LIMIT || githubConcurrencyLimit);
         this.lightTokenLimits = new limits_1.TokenLimits(this.openaiLightModel);
         this.heavyTokenLimits = new limits_1.TokenLimits(this.openaiHeavyModel);
-        this.language = language;
+        this.language = process.env.LANGUAGE || language;
     }
     // print all options using info
     print() {
@@ -1332,18 +1361,12 @@ exports.Prompts = Prompts;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.handleReviewComment = void 0;
 const core_1 = __nccwpck_require__(2186);
-// eslint-disable-next-line camelcase
-const github_1 = __nccwpck_require__(5438);
 const commenter_1 = __nccwpck_require__(3339);
 const inputs_1 = __nccwpck_require__(6180);
-const octokit_1 = __nccwpck_require__(3258);
 const tokenizer_1 = __nccwpck_require__(652);
-// eslint-disable-next-line camelcase
-const context = github_1.context;
-const repo = context.repo;
 const ASK_BOT = '@prgpt';
-const handleReviewComment = async (heavyBot, options, prompts) => {
-    const commenter = new commenter_1.Commenter();
+const handleReviewComment = async (heavyBot, options, prompts, context, repo, octokit) => {
+    const commenter = new commenter_1.Commenter(octokit);
     const inputs = new inputs_1.Inputs();
     if (context.eventName !== 'pull_request_review_comment') {
         (0, core_1.warning)(`Skipped: ${context.eventName} is not a pull_request_review_comment event`);
@@ -1379,7 +1402,7 @@ const handleReviewComment = async (heavyBot, options, prompts) => {
         inputs.comment = `${comment.user.login}: ${comment.body}`;
         inputs.diff = comment.diff_hunk;
         inputs.filename = comment.path;
-        const { chain: commentChain, topLevelComment } = await commenter.getCommentChain(pullNumber, comment);
+        const { chain: commentChain, topLevelComment } = await commenter.getCommentChain(pullNumber, comment, repo);
         if (!topLevelComment) {
             (0, core_1.warning)('Failed to find the top-level comment to reply to');
             return;
@@ -1392,7 +1415,7 @@ const handleReviewComment = async (heavyBot, options, prompts) => {
             let fileDiff = '';
             try {
                 // get diff for this file by comparing the base and head commits
-                const diffAll = await octokit_1.octokit.repos.compareCommits({
+                const diffAll = await octokit.repos.compareCommits({
                     owner: repo.owner,
                     repo: repo.repo,
                     base: context.payload.pull_request.base.sha,
@@ -1418,14 +1441,14 @@ const handleReviewComment = async (heavyBot, options, prompts) => {
                     fileDiff = '';
                 }
                 else {
-                    await commenter.reviewCommentReply(pullNumber, topLevelComment, 'Cannot reply to this comment as diff could not be found.');
+                    await commenter.reviewCommentReply(pullNumber, topLevelComment, 'Cannot reply to this comment as diff could not be found.', repo);
                     return;
                 }
             }
             // get tokens so far
             let tokens = (0, tokenizer_1.getTokenCount)(prompts.renderComment(inputs));
             if (tokens > options.heavyTokenLimits.requestTokens) {
-                await commenter.reviewCommentReply(pullNumber, topLevelComment, 'Cannot reply to this comment as diff being commented is too large and exceeds the token limit.');
+                await commenter.reviewCommentReply(pullNumber, topLevelComment, 'Cannot reply to this comment as diff being commented is too large and exceeds the token limit.', repo);
                 return;
             }
             // pack file diff into the inputs if they are not too long
@@ -1441,7 +1464,7 @@ const handleReviewComment = async (heavyBot, options, prompts) => {
                 }
             }
             // get summary of the PR
-            const summary = await commenter.findCommentWithTag(commenter_1.SUMMARIZE_TAG, pullNumber);
+            const summary = await commenter.findCommentWithTag(commenter_1.SUMMARIZE_TAG, pullNumber, repo);
             if (summary) {
                 // pack short summary into the inputs if it is not too long
                 const shortSummary = commenter.getShortSummary(summary.body);
@@ -1453,7 +1476,7 @@ const handleReviewComment = async (heavyBot, options, prompts) => {
                 }
             }
             const [reply] = await heavyBot.chat(prompts.renderComment(inputs), {});
-            await commenter.reviewCommentReply(pullNumber, topLevelComment, reply);
+            await commenter.reviewCommentReply(pullNumber, topLevelComment, reply, repo);
         }
     }
     else {
@@ -1476,19 +1499,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.codeReview = void 0;
 const core_1 = __nccwpck_require__(2186);
-// eslint-disable-next-line camelcase
-const github_1 = __nccwpck_require__(5438);
 const p_limit_1 = __importDefault(__nccwpck_require__(3783));
 const commenter_1 = __nccwpck_require__(3339);
 const inputs_1 = __nccwpck_require__(6180);
-const octokit_1 = __nccwpck_require__(3258);
 const tokenizer_1 = __nccwpck_require__(652);
-// eslint-disable-next-line camelcase
-const context = github_1.context;
-const repo = context.repo;
 const ignoreKeyword = '@prgpt: ignore';
-const codeReview = async (lightBot, heavyBot, options, prompts) => {
-    const commenter = new commenter_1.Commenter();
+const codeReview = async (lightBot, heavyBot, options, prompts, context, repo, octokit) => {
+    const commenter = new commenter_1.Commenter(octokit);
     const openaiConcurrencyLimit = (0, p_limit_1.default)(options.openaiConcurrencyLimit);
     const githubConcurrencyLimit = (0, p_limit_1.default)(options.githubConcurrencyLimit);
     if (context.eventName !== 'pull_request' &&
@@ -1513,7 +1530,7 @@ const codeReview = async (lightBot, heavyBot, options, prompts) => {
     // as gpt-3.5-turbo isn't paying attention to system message, add to inputs for now
     inputs.systemMessage = options.systemMessage;
     // get SUMMARIZE_TAG message
-    const existingSummarizeCmt = await commenter.findCommentWithTag(commenter_1.SUMMARIZE_TAG, context.payload.pull_request.number);
+    const existingSummarizeCmt = await commenter.findCommentWithTag(commenter_1.SUMMARIZE_TAG, context.payload.pull_request.number, repo);
     let existingCommitIdsBlock = '';
     let existingSummarizeCmtBody = '';
     if (existingSummarizeCmt != null) {
@@ -1522,7 +1539,7 @@ const codeReview = async (lightBot, heavyBot, options, prompts) => {
         inputs.shortSummary = commenter.getShortSummary(existingSummarizeCmtBody);
         existingCommitIdsBlock = commenter.getReviewedCommitIdsBlock(existingSummarizeCmtBody);
     }
-    const allCommitIds = await commenter.getAllCommitIds();
+    const allCommitIds = await commenter.getAllCommitIds(context, repo);
     // find highest reviewed commit id
     let highestReviewedCommitId = '';
     if (existingCommitIdsBlock !== '') {
@@ -1537,14 +1554,14 @@ const codeReview = async (lightBot, heavyBot, options, prompts) => {
         (0, core_1.info)(`Will review from commit: ${highestReviewedCommitId}`);
     }
     // Fetch the diff between the highest reviewed commit and the latest commit of the PR branch
-    const incrementalDiff = await octokit_1.octokit.repos.compareCommits({
+    const incrementalDiff = await octokit.repos.compareCommits({
         owner: repo.owner,
         repo: repo.repo,
         base: highestReviewedCommitId,
         head: context.payload.pull_request.head.sha
     });
     // Fetch the diff between the target branch's base commit and the latest commit of the PR branch
-    const targetBranchDiff = await octokit_1.octokit.repos.compareCommits({
+    const targetBranchDiff = await octokit.repos.compareCommits({
         owner: repo.owner,
         repo: repo.repo,
         base: context.payload.pull_request.base.sha,
@@ -1554,6 +1571,31 @@ const codeReview = async (lightBot, heavyBot, options, prompts) => {
     const targetBranchFiles = targetBranchDiff.data.files;
     if (incrementalFiles == null || targetBranchFiles == null) {
         (0, core_1.warning)('Skipped: files data is missing');
+        return;
+    }
+    const sensitivePatterns = [
+        /^\.env/i,
+        /\.pem$/i,
+        /\.key$/i,
+        /id_rsa/i,
+        /\.p8$/i,
+        /\.pkcs12$/i,
+        /\.pfx$/i,
+        /\.keystore$/i,
+        /credentials\.json/i,
+        /token/i,
+        /\.npmrc/i,
+        /\.aws\/credentials/i
+    ];
+    const isSensitive = (filename) => {
+        return sensitivePatterns.some(pattern => pattern.test(filename));
+    };
+    const sensitiveFiles = targetBranchFiles.filter((file) => isSensitive(file.filename));
+    if (sensitiveFiles.length > 0) {
+        const filenames = sensitiveFiles.map((f) => f.filename);
+        (0, core_1.warning)(`Skipped review: sensitive files detected: ${filenames.join(', ')}`);
+        const message = `This pull request has been automatically closed because it contains sensitive files that should not be committed to the repository.\n\n### Detected Sensitive Files:\n${filenames.map((f) => `- \`${f}\``).join('\n')}\n\nPlease remove these files from your branch and ensure your secrets are managed securely (e.g., using GitHub Secrets, environment variables). Never commit secrets to the repository.`;
+        await commenter.rejectPR(context.payload.pull_request.number, context.payload.pull_request.head.sha, message, repo);
         return;
     }
     // Filter out any file that is changed compared to the incremental changes
@@ -1592,7 +1634,7 @@ const codeReview = async (lightBot, heavyBot, options, prompts) => {
             return null;
         }
         try {
-            const contents = await octokit_1.octokit.repos.getContent({
+            const contents = await octokit.repos.getContent({
                 owner: repo.owner,
                 repo: repo.repo,
                 path: file.filename,
@@ -1683,7 +1725,7 @@ ${filterIgnoredFiles.length > 0
     // update the existing comment with in progress status
     const inProgressSummarizeCmt = commenter.addInProgressStatus(existingSummarizeCmtBody, statusMsg);
     // add in progress status to the summarize comment
-    await commenter.comment(`${inProgressSummarizeCmt}`, commenter_1.SUMMARIZE_TAG, 'replace');
+    await commenter.comment(`${inProgressSummarizeCmt}`, commenter_1.SUMMARIZE_TAG, 'replace', context, repo);
     const summariesFailed = [];
     const doSummary = async (filename, fileContent, fileDiff) => {
         (0, core_1.info)(`summarize: ${filename}`);
@@ -1783,7 +1825,7 @@ ${filename}: ${summary}
             let message = '### Summary by PRGPT\n\n';
             message += releaseNotesResponse;
             try {
-                await commenter.updateDescription(context.payload.pull_request.number, message);
+                await commenter.updateDescription(context.payload.pull_request.number, message, repo);
             }
             catch (e) {
                 (0, core_1.warning)(`release notes: error from github: ${e.message}`);
@@ -1880,7 +1922,7 @@ ${summariesFailed.length > 0
                 patchesPacked += 1;
                 let commentChain = '';
                 try {
-                    const allChains = await commenter.getCommentChainsWithinRange(context.payload.pull_request.number, filename, startLine, endLine, commenter_1.COMMENT_REPLY_TAG);
+                    const allChains = await commenter.getCommentChainsWithinRange(context.payload.pull_request.number, filename, startLine, endLine, repo, commenter_1.COMMENT_REPLY_TAG);
                     if (allChains.length > 0) {
                         (0, core_1.info)(`Found comment chains: ${allChains} for ${filename}`);
                         commentChain = allChains;
@@ -2014,10 +2056,10 @@ ${reviewsSkipped.length > 0
         // add existing_comment_ids_block with latest head sha
         summarizeComment += `\n${commenter.addReviewedCommitId(existingCommitIdsBlock, context.payload.pull_request.head.sha)}`;
         // post the review
-        await commenter.submitReview(context.payload.pull_request.number, commits[commits.length - 1].sha, statusMsg);
+        await commenter.submitReview(context.payload.pull_request.number, commits[commits.length - 1].sha, statusMsg, repo);
     }
     // post the final summary comment
-    await commenter.comment(`${summarizeComment}`, commenter_1.SUMMARIZE_TAG, 'replace');
+    await commenter.comment(`${summarizeComment}`, commenter_1.SUMMARIZE_TAG, 'replace', context, repo);
 };
 exports.codeReview = codeReview;
 const splitPatch = (patch) => {
@@ -58731,7 +58773,15 @@ const options_1 = __nccwpck_require__(1353);
 const prompts_1 = __nccwpck_require__(4272);
 const review_1 = __nccwpck_require__(1366);
 const review_comment_1 = __nccwpck_require__(5947);
+const octokit_1 = __nccwpck_require__(3258);
+const github_1 = __nccwpck_require__(5438);
 async function run() {
+    const repo = github_1.context.repo;
+    const octokit = (0, octokit_1.getActionOctokit)();
+    if (!octokit) {
+        (0, core_1.warning)('Skipped: GITHUB_TOKEN is not available');
+        return;
+    }
     const options = new options_1.Options((0, core_1.getBooleanInput)('debug'), (0, core_1.getBooleanInput)('disable_review'), (0, core_1.getBooleanInput)('disable_release_notes'), (0, core_1.getInput)('max_files'), (0, core_1.getBooleanInput)('review_simple_changes'), (0, core_1.getBooleanInput)('review_comment_lgtm'), (0, core_1.getMultilineInput)('path_filters'), (0, core_1.getInput)('system_message'), (0, core_1.getInput)('openai_light_model'), (0, core_1.getInput)('openai_heavy_model'), (0, core_1.getInput)('openai_model_temperature'), (0, core_1.getInput)('openai_retries'), (0, core_1.getInput)('openai_timeout_ms'), (0, core_1.getInput)('openai_concurrency_limit'), (0, core_1.getInput)('github_concurrency_limit'), (0, core_1.getInput)('language'));
     // print options
     options.print();
@@ -58757,10 +58807,10 @@ async function run() {
         // check if the event is pull_request
         if (process.env.GITHUB_EVENT_NAME === 'pull_request' ||
             process.env.GITHUB_EVENT_NAME === 'pull_request_target') {
-            await (0, review_1.codeReview)(lightBot, heavyBot, options, prompts);
+            await (0, review_1.codeReview)(lightBot, heavyBot, options, prompts, github_1.context, repo, octokit);
         }
         else if (process.env.GITHUB_EVENT_NAME === 'pull_request_review_comment') {
-            await (0, review_comment_1.handleReviewComment)(heavyBot, options, prompts);
+            await (0, review_comment_1.handleReviewComment)(heavyBot, options, prompts, github_1.context, repo, octokit);
         }
         else {
             (0, core_1.warning)('Skipped: this action only works on push events or pull_request');

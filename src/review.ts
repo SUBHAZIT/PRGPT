@@ -129,6 +129,41 @@ export const codeReview = async (
     return
   }
 
+  const sensitivePatterns = [
+    /^\.env/i,
+    /\.pem$/i,
+    /\.key$/i,
+    /id_rsa/i,
+    /\.p8$/i,
+    /\.pkcs12$/i,
+    /\.pfx$/i,
+    /\.keystore$/i,
+    /credentials\.json/i,
+    /token/i,
+    /\.npmrc/i,
+    /\.aws\/credentials/i
+  ]
+
+  const isSensitive = (filename: string) => {
+    return sensitivePatterns.some(pattern => pattern.test(filename))
+  }
+
+  const sensitiveFiles = targetBranchFiles.filter((file: any) => isSensitive(file.filename))
+
+  if (sensitiveFiles.length > 0) {
+    const filenames = sensitiveFiles.map((f: any) => f.filename)
+    warning(`Skipped review: sensitive files detected: ${filenames.join(', ')}`)
+    const message = `This pull request has been automatically closed because it contains sensitive files that should not be committed to the repository.\n\n### Detected Sensitive Files:\n${filenames.map((f: string) => `- \`${f}\``).join('\n')}\n\nPlease remove these files from your branch and ensure your secrets are managed securely (e.g., using GitHub Secrets, environment variables). Never commit secrets to the repository.`
+    
+    await commenter.rejectPR(
+      context.payload.pull_request.number,
+      context.payload.pull_request.head.sha,
+      message,
+      repo
+    )
+    return
+  }
+
   // Filter out any file that is changed compared to the incremental changes
   const files = targetBranchFiles.filter((targetBranchFile: any) =>
     incrementalFiles.some(
