@@ -102,6 +102,3 @@ Build the typescript and package it for distribution:
 $ npm run build && npm run package
 ```
 
-## Disclaimer
-
-- Your code will be sent to OpenAI's servers for processing.
